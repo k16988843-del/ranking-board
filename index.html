@@ -125,7 +125,7 @@
       <input type="text" id="rankIn" maxlength="8" placeholder="追加するランク名(例:S++)">
       <select id="rankAfter" style="font:inherit;padding:7px 8px;border:1px solid var(--line);border-radius:8px"></select>
       <button id="btnAddRank">ランクを追加</button>
-      <span class="muted">選んだ行の下に、新しい行が増えます。全員の画面に出ます。各行の「▲▼」で、あとから順番を入れ替えられます。追加したランクで空のものは「削除」で消せます。</span>
+      <span class="muted">選んだ行の下に、新しい行が増えます。全員の画面に出ます。「最終案」のタブでは、各行の「▲▼」で、あとから順番を入れ替えられます。追加したランクで空のものは「削除」で消せます。</span>
     </div>
 
     <div id="viewMine">
@@ -189,7 +189,7 @@
         <h2>ランクの追加・入れ替え・説明文</h2>
         <ul>
           <li><b>追加</b>: ランク名を入れて、どの行の下に入れるかを選び、「ランクを追加」を押します。全員の画面に出ます。</li>
-          <li><b>入れ替え</b>: 各行のラベルの「▲」「▼」で、行を上下に動かせます。「自分のボード」の順番は自分だけ、「最終案」の順番は全員で共有です。</li>
+          <li><b>入れ替え</b>: 「最終案」のタブで、各行のラベルの「▲」「▼」を押すと、行を上下に動かせます。順番は全員で共有です。</li>
           <li><b>削除</b>: 追加したランクで、空のものは、「削除」で消せます。</li>
           <li><b>説明文</b>: 各ランクの行の上の薄い文字を、クリックすると、そのランクの説明(1〜2行)を書けます。全員の画面に出ます。</li>
         </ul>
@@ -212,7 +212,6 @@
         <h2>最終案の変更点(DBを書き換えるときの一覧)</h2>
         <div class="changes" id="changesFinal"></div>
         <div class="bar"><button class="primary" id="btnCopyFinal">変更点をコピー</button><button id="btnReset">最終案を最初の並びに戻す</button></div>
-        <div class="bar"><button id="btnLow">B+〜Dのキャラを、下のG〜Jの行へ移す</button><span class="muted">B+→G、B→H、C→I、D→J の行へ、ランク分けはそのままで移します。B+〜Dの行は空になります。</span></div>
       </section>
     </div>
   </section>
@@ -312,6 +311,7 @@
     rankList = ordered;
     var prevHas = hasData;
     hasData = items.length > 0;
+    $("btnImport").classList.toggle("hide", hasData);
     if (hasData) { $("boardWrap").classList.remove("hide"); if (!prevHas) $("loadPanel").classList.add("hide"); }
     else { $("loadPanel").classList.remove("hide"); $("boardWrap").classList.add("hide"); }
     renderAll();
@@ -380,7 +380,7 @@
         b.onclick = function () { moveRank(rk, d[1], which); };
         mv.appendChild(b);
       });
-      lab.appendChild(mv);
+      if (which === "final") lab.appendChild(mv);
       if (extras.indexOf(rk) >= 0 && !rankInUse(rk)) {
         var del = el("button", "small", "削除"); del.style.marginTop = "4px";
         del.onclick = function () { if (confirm("ランク「" + rk + "」の行を削除します。よろしいですか？")) ref.child("extraRanks").set(extras.filter(function (x) { return x !== rk; })); };
@@ -649,7 +649,7 @@
     var cur = {}, n = 0;
     items.forEach(function (it) { if (finalCur[it.key] !== it.r) { cur[it.key] = finalCur[it.key]; n++; } });
     if (!confirm("最終案で動いている " + n + "体の位置を、あなたのボードにコピーします。今のあなたのボードの内容は、上書きされます。コピーした分は「みんなの意見」には出ません。コピーしたあとに動かした分だけが、あなたの意見として出ます。よろしいですか？")) return;
-    ref.child("opinions/" + myUid()).set({ name: myName, cur: cur, base: cur, order: myOrderRaw() || null });
+    ref.child("opinions/" + myUid()).set({ name: myName, cur: cur, base: cur });
   };
   $("btnResetAll").onclick = function () {
     var uids = Object.keys(opinions), upd = {}, n = 0;
@@ -666,18 +666,6 @@
     var c = {}; items.forEach(function (it) { c[it.key] = it.r; });
     ref.child("cur").set(c);
   };
-  $("btnLow").onclick = function () {
-    var upd = {}, n = 0;
-    items.forEach(function (it) {
-      var to = LOW[it.r]; if (!to) return;                 // 元がB+〜Dのキャラだけ
-      var c = finalCur[it.key];
-      // 元の行・以前の版の「対象外」「旧◯」にいるものだけ移す(ほかのランクへ動かした分は触らない)
-      if ((c === it.r || c === "対象外" || /^旧/.test(c)) && c !== to) { upd[it.key] = to; n++; }
-    });
-    if (!n) { alert("移すキャラは、いません。"); return; }
-    if (!confirm("元がB+〜Dの " + n + "体を、G〜Jの行(B+→G、B→H、C→I、D→J)に移します。全員の画面の「最終案」が変わります。よろしいですか？")) return;
-    ref.child("cur").update(upd);
-  };
   function rankInUse(rk) {
     var used = items.some(function (it) { return finalCur[it.key] === rk; });
     if (used) return true;
@@ -686,13 +674,7 @@
   function normList(x) { return Array.isArray(x) ? x.filter(Boolean) : (x ? Object.keys(x).map(function (k) { return x[k]; }) : []); }
   function myOrderRaw() { var o = opinions[myUid()]; return o && o.order ? normList(o.order) : null; }
   // 自分のボードの行の順番(自分で入れ替えていなければ、最終案と同じ)
-  function mineList() {
-    var raw = myOrderRaw(); if (!raw) return rankList.slice();
-    var out = [];
-    raw.forEach(function (r) { if (rankList.indexOf(r) >= 0 && out.indexOf(r) < 0) out.push(r); });
-    rankList.forEach(function (r) { if (out.indexOf(r) < 0) out.push(r); });
-    return out;
-  }
+  function mineList() { return rankList.slice(); }   // 自分のボードの行の順番は、いつも最終案と同じ
   function curList() { return tab === "mine" ? mineList() : rankList; }
   function moveRank(rk, dir, which) {
     var base = which === "mine" ? mineList() : rankList;
@@ -726,11 +708,6 @@
     if (rankList.indexOf(n) >= 0) { alert("「" + n + "」の行は、すでにあります。"); return; }
     var after = $("rankAfter").value;
     var upd = { extraRanks: extras.concat([n]), rankOrder: insertAfter(rankList, after, n) };
-    // 自分のボードで追加したとき、自分で順番を入れ替えている人は、自分の順番にも入れる
-    if (tab === "mine" && myName && myOrderRaw()) {
-      upd["opinions/" + myUid() + "/order"] = insertAfter(mineList(), after, n);
-      upd["opinions/" + myUid() + "/name"] = myName;
-    }
     ref.update(upd);
     $("rankIn").value = "";
   }
