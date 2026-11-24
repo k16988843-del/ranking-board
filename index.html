@@ -90,6 +90,12 @@
       <button id="tabAll">みんなの意見</button>
       <button id="tabFinal">最終案</button>
     </div>
+    <div class="bar" id="addRankBar" style="margin:-4px 0 14px">
+      <input type="text" id="rankIn" maxlength="8" placeholder="追加するランク名(例:S++)">
+      <select id="rankAfter" style="font:inherit;padding:7px 8px;border:1px solid var(--line);border-radius:8px"></select>
+      <button id="btnAddRank">ランクを追加</button>
+      <span class="muted">選んだ行の下に、新しい行が増えます。全員の画面に出ます。各行の「▲▼」で、あとから順番を入れ替えられます。追加したランクで空のものは「削除」で消せます。</span>
+    </div>
 
     <div id="viewMine">
       <section class="panel" id="nameGate">
@@ -122,6 +128,7 @@
         <h2>最終案の変更点(DBを書き換えるときの一覧)</h2>
         <div class="changes" id="changesFinal"></div>
         <div class="bar"><button class="primary" id="btnCopyFinal">変更点をコピー</button><button id="btnReset">最終案を最初の並びに戻す</button></div>
+        <div class="bar"><button id="btnLow">B+〜Dのキャラを、下のG〜Jの行へ移す</button><span class="muted">B+→G、B→H、C→I、D→J の行へ、ランク分けはそのままで移します。B+〜Dの行は空になります。</span></div>
       </section>
     </div>
   </section>
@@ -142,11 +149,14 @@
   };
   var SNIPPET = "(()=>{const o=[];document.querySelectorAll('table').forEach(t=>t.querySelectorAll('tr').forEach(r=>{const m=r.children[0]&&r.children[0].querySelector('img');if(!m||!/^(SSS|SS|S\\+|S|A\\+|A|B\\+|B|C|D)画像$/.test(m.alt))return;r.children[1].querySelectorAll('a').forEach(a=>{const i=a.querySelector('img')||{};o.push({r:m.alt.slice(0,-2),n:a.textContent.trim(),f:(i.alt||'').replace(/のアイコン$/,''),s:([i.dataset&&i.dataset.src,i.getAttribute&&i.getAttribute('data-original'),i.currentSrc,i.src].find(u=>u&&!/^data:/.test(u))||'').split('?')[0],id:(a.href.match(/battlecats\\/(\\d+)/)||[])[1]})})}));copy(JSON.stringify(o));console.log(o.length+'体をコピーしました')})()";
   var COLORS = {"SSS":"#c2255c","SS":"#e03131","S+":"#f08c00","S":"#e67700","A+":"#d9480f","A":"#c92a2a","B+":"#2b8a3e","B":"#1971c2","C":"#5f3dc4","D":"#495057"};
+  var LOW = { "B+": "G", "B": "H", "C": "I", "D": "J" };
+  Object.keys(LOW).forEach(function (k) { COLORS[LOW[k]] = "#868e96"; });
   var NAME_KEY = "bc-ranking-board-name";
   var $ = function (id) { return document.getElementById(id); };
   var items = [], rankList = [];
   var finalCur = {};        // 最終案(全員で共有)
   var opinions = {};        // uid -> {name, cur:{key:rank}}  動かしたキャラだけ
+  var extras = [];          // あとから追加したランク名(全員で共有)
   var namesOn = true, hasData = false, tab = "mine";
   var myName = ""; try { myName = localStorage.getItem(NAME_KEY) || ""; } catch (e) {}
   var db = null, ref = null;
@@ -185,9 +195,23 @@
     items = list;
     rankList = [];
     items.forEach(function (it) { if (rankList.indexOf(it.r) < 0) rankList.push(it.r); });
+    if (items.length) Object.keys(LOW).forEach(function (k) { rankList.push(LOW[k]); });
+    var ex = val.extraRanks || [];
+    extras = Array.isArray(ex) ? ex.filter(Boolean) : Object.keys(ex).map(function (k) { return ex[k]; });
+    if (items.length) extras.forEach(function (r) { if (rankList.indexOf(r) < 0) rankList.push(r); });
     var c = val.cur || {};
     finalCur = {}; items.forEach(function (it) { finalCur[it.key] = c[it.key] || it.r; });
     opinions = val.opinions || {};
+    // 以前の版で使った名前など、行のないランクにいるキャラも消えないよう、行を足す
+    items.forEach(function (it) { var r = finalCur[it.key]; if (rankList.indexOf(r) < 0) rankList.push(r); });
+    Object.keys(opinions).forEach(function (u) { var oc = (opinions[u] && opinions[u].cur) || {}; Object.keys(oc).forEach(function (k) { if (rankList.indexOf(oc[k]) < 0) rankList.push(oc[k]); }); });
+    // 全員で共有している行の順番を反映(記録にない行は、元の位置のまま後ろに続ける)
+    var ro = val.rankOrder || [];
+    ro = Array.isArray(ro) ? ro : Object.keys(ro).map(function (k) { return ro[k]; });
+    var ordered = [];
+    ro.forEach(function (r) { if (rankList.indexOf(r) >= 0 && ordered.indexOf(r) < 0) ordered.push(r); });
+    rankList.forEach(function (r) { if (ordered.indexOf(r) < 0) ordered.push(r); });
+    rankList = ordered;
     hasData = items.length > 0;
     if (hasData) { $("loadPanel").classList.add("hide"); $("boardWrap").classList.remove("hide"); }
     else { $("loadPanel").classList.remove("hide"); $("boardWrap").classList.add("hide"); }
@@ -201,6 +225,8 @@
       $("view" + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle("hide", tab !== t);
       $("tab" + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle("on", tab === t);
     });
+    $("addRankBar").classList.toggle("hide", !hasData || tab === "all");
+    if (hasData) fillRankSelect();
     if (!hasData) return;
     if (tab === "mine") {
       $("nameGate").classList.toggle("hide", !!myName);
@@ -223,6 +249,18 @@
       var row = el("div", "row");
       var lab = el("div", "rank"); lab.style.background = COLORS[rk] || "#555";
       lab.appendChild(document.createTextNode(rk)); lab.appendChild(el("small", "", members.length + "体"));
+      var mv = el("div"); mv.style.marginTop = "4px";
+      [["▲", -1], ["▼", 1]].forEach(function (d) {
+        var b = el("button", "small", d[0]); b.style.padding = "1px 6px"; b.style.margin = "0 1px";
+        b.onclick = function () { moveRank(rk, d[1]); };
+        mv.appendChild(b);
+      });
+      lab.appendChild(mv);
+      if (extras.indexOf(rk) >= 0 && !rankInUse(rk)) {
+        var del = el("button", "small", "削除"); del.style.marginTop = "4px";
+        del.onclick = function () { if (confirm("ランク「" + rk + "」の行を削除します。よろしいですか？")) ref.child("extraRanks").set(extras.filter(function (x) { return x !== rk; })); };
+        lab.appendChild(del);
+      }
       var cells = el("div", "cells");
       stay.concat(came).forEach(function (it) { cells.appendChild(makeChip(it, curMap)); });
       cells.addEventListener("dragover", function (e) { e.preventDefault(); cells.classList.add("over"); });
@@ -365,6 +403,50 @@
     var c = {}; items.forEach(function (it) { c[it.key] = it.r; });
     ref.child("cur").set(c);
   };
+  $("btnLow").onclick = function () {
+    var upd = {}, n = 0;
+    items.forEach(function (it) {
+      var to = LOW[it.r]; if (!to) return;                 // 元がB+〜Dのキャラだけ
+      var c = finalCur[it.key];
+      // 元の行・以前の版の「対象外」「旧◯」にいるものだけ移す(ほかのランクへ動かした分は触らない)
+      if ((c === it.r || c === "対象外" || /^旧/.test(c)) && c !== to) { upd[it.key] = to; n++; }
+    });
+    if (!n) { alert("移すキャラは、いません。"); return; }
+    if (!confirm("元がB+〜Dの " + n + "体を、G〜Jの行(B+→G、B→H、C→I、D→J)に移します。全員の画面の「最終案」が変わります。よろしいですか？")) return;
+    ref.child("cur").update(upd);
+  };
+  function rankInUse(rk) {
+    var used = items.some(function (it) { return finalCur[it.key] === rk; });
+    if (used) return true;
+    return Object.keys(opinions).some(function (u) { var oc = (opinions[u] && opinions[u].cur) || {}; return Object.keys(oc).some(function (k) { return oc[k] === rk; }); });
+  }
+  function moveRank(rk, dir) {
+    var i = rankList.indexOf(rk), j = i + dir;
+    if (i < 0 || j < 0 || j >= rankList.length) return;
+    var o = rankList.slice(); var t = o[i]; o[i] = o[j]; o[j] = t;
+    ref.child("rankOrder").set(o);
+  }
+  function fillRankSelect() {
+    var sel = $("rankAfter"), want = ["", ""].concat(rankList).join("|");
+    if (sel.dataset.sig === want) return;
+    var keep = sel.value; sel.innerHTML = "";
+    var o0 = document.createElement("option"); o0.value = ""; o0.textContent = "いちばん下に追加"; sel.appendChild(o0);
+    rankList.forEach(function (r) { var o = document.createElement("option"); o.value = r; o.textContent = r + " の下に追加"; sel.appendChild(o); });
+    sel.dataset.sig = want;
+    if (keep && rankList.indexOf(keep) >= 0) sel.value = keep;
+  }
+  function addRank() {
+    var n = $("rankIn").value.trim().slice(0, 8);
+    if (!n) return;
+    if (rankList.indexOf(n) >= 0) { alert("「" + n + "」の行は、すでにあります。"); return; }
+    var after = $("rankAfter").value, order = rankList.slice();
+    var at = after ? order.indexOf(after) : -1;
+    if (at >= 0) order.splice(at + 1, 0, n); else order.push(n);
+    ref.update({ extraRanks: extras.concat([n]), rankOrder: order });
+    $("rankIn").value = "";
+  }
+  $("btnAddRank").onclick = addRank;
+  $("rankIn").onkeydown = function (e) { if (e.key === "Enter") addRank(); };
   function saveName() {
     var n = $("nameIn").value.trim().slice(0, 20); if (!n) return;
     myName = n; try { localStorage.setItem(NAME_KEY, n); } catch (e) {}
