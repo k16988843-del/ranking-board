@@ -59,6 +59,22 @@
   .rnote.empty { color:#aaa; }
   .rnote:hover { background:#fff8f0; }
   textarea.rnote-in { width:calc(100% - 20px); margin:6px 10px 0; font-size:12px; line-height:1.5; font-family:inherit; min-height:48px; padding:4px 6px; }
+  .chip { -webkit-touch-callout:none; -webkit-user-select:none; }
+  .chip.dragging { opacity:.35; }
+  @media (max-width: 640px) {
+    header { padding:10px 12px; gap:6px; }
+    header h1 { font-size:15px; width:100%; margin:0; }
+    main { padding:10px 8px 50px; }
+    .rank { width:56px; font-size:16px; }
+    .rank small { font-size:10px; }
+    .cells { gap:4px; padding:6px; }
+    .chip { width:54px; }
+    .chip img, .noimg { width:50px; height:50px; }
+    .chip .nm { font-size:9px; }
+    .rnote { font-size:11px; padding:5px 8px 0; }
+    table.op { font-size:12px; }
+    #viewAll { overflow-x:auto; }
+  }
   .warn { background:#fff4e6; border:1px solid #ffd8a8; border-radius:8px; padding:8px 12px; font-size:13px; margin-bottom:12px; }
 </style>
 </head>
@@ -311,6 +327,7 @@
       }
       var cells = el("div", "cells");
       stay.concat(came).forEach(function (it) { cells.appendChild(makeChip(it, curMap)); });
+      cells._onDrop = function (k) { onMove(k, rk); };
       cells.addEventListener("dragover", function (e) { e.preventDefault(); cells.classList.add("over"); });
       cells.addEventListener("dragleave", function (e) { if (!cells.contains(e.relatedTarget)) cells.classList.remove("over"); });
       cells.addEventListener("drop", function (e) {
@@ -334,14 +351,58 @@
     return holder;
   }
 
+  var COARSE = false; try { COARSE = window.matchMedia("(pointer: coarse)").matches; } catch (e) {}
+  // スマホ用: 長押ししてからドラッグ(すぐ動かすと、画面のスクロールになります)
+  function attachTouchDrag(c, it) {
+    var timer = null, dragging = false, ghost = null, over = null, sx = 0, sy = 0;
+    function under(t) { var x = document.elementFromPoint(t.clientX, t.clientY); return x && x.closest ? x.closest(".cells") : null; }
+    function visualOff() {
+      clearTimeout(timer);
+      if (ghost) { ghost.remove(); ghost = null; }
+      if (over) { over.classList.remove("over"); over = null; }
+      c.classList.remove("dragging");
+    }
+    function start() {
+      dragging = true; editing = true; c.classList.add("dragging");
+      ghost = c.cloneNode(true); ghost.classList.remove("dragging");
+      ghost.style.cssText = "position:fixed;z-index:9999;pointer-events:none;opacity:.9;transform:scale(1.15);left:" + (sx - 30) + "px;top:" + (sy - 50) + "px";
+      document.body.appendChild(ghost);
+      try { if (navigator.vibrate) navigator.vibrate(15); } catch (e) {}
+    }
+    c.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+    c.addEventListener("touchstart", function (e) {
+      if (e.touches.length !== 1) return;
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+      clearTimeout(timer); timer = setTimeout(start, 250);
+    }, { passive: true });
+    c.addEventListener("touchmove", function (e) {
+      var t = e.touches[0];
+      if (!dragging) { if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) clearTimeout(timer); return; }
+      e.preventDefault();
+      ghost.style.left = (t.clientX - 30) + "px"; ghost.style.top = (t.clientY - 50) + "px";
+      var cells = under(t);
+      if (cells !== over) { if (over) over.classList.remove("over"); if (cells) cells.classList.add("over"); over = cells; }
+      if (t.clientY < 80) window.scrollBy(0, -14); else if (t.clientY > window.innerHeight - 80) window.scrollBy(0, 14);
+    }, { passive: false });
+    function finish(e, drop) {
+      clearTimeout(timer);
+      if (!dragging) return;
+      var cells = drop && e.changedTouches && e.changedTouches[0] ? under(e.changedTouches[0]) : null;
+      visualOff(); dragging = false; editing = false;
+      if (cells && cells._onDrop) cells._onDrop(it.key); else renderAll();
+    }
+    c.addEventListener("touchend", function (e) { finish(e, true); });
+    c.addEventListener("touchcancel", function (e) { finish(e, false); });
+  }
   function makeChip(it, curMap) {
-    var c = el("div", "chip"); c.draggable = true; c.title = it.f || it.n;
+    var c = el("div", "chip"); c.draggable = !COARSE; c.title = it.f || it.n;
     if (curMap[it.key] !== it.r) c.classList.add("moved");
     c.appendChild(iconEl(it));
     c.appendChild(el("div", "nm", it.n));
     c.appendChild(el("div", "tag", "元:" + it.r));
     c.addEventListener("dragstart", function (e) { e.dataTransfer.setData("text/plain", it.key); e.dataTransfer.effectAllowed = "move"; c.classList.add("dragging"); });
     c.addEventListener("dragend", function () { c.classList.remove("dragging"); });
+    attachTouchDrag(c, it);
     return c;
   }
 
