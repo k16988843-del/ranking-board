@@ -54,6 +54,11 @@
   .badge { display:inline-block; color:#fff; font-weight:700; border-radius:6px; padding:1px 8px; font-size:13px; }
   .sug { margin-bottom:6px; line-height:1.7; }
   .final-now { font-size:12px; color:var(--sub); }
+  .rbody { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .rnote { font-size:12px; line-height:1.5; color:#444; padding:6px 10px 0; cursor:text; white-space:pre-wrap; }
+  .rnote.empty { color:#aaa; }
+  .rnote:hover { background:#fff8f0; }
+  textarea.rnote-in { width:calc(100% - 20px); margin:6px 10px 0; font-size:12px; line-height:1.5; font-family:inherit; min-height:48px; padding:4px 6px; }
   .warn { background:#fff4e6; border:1px solid #ffd8a8; border-radius:8px; padding:8px 12px; font-size:13px; margin-bottom:12px; }
 </style>
 </head>
@@ -69,19 +74,20 @@
 <main>
 
   <section class="panel hide" id="loadPanel">
-    <h2>① データを読み込む(最初に1人だけ・全員の画面に反映されます)</h2>
+    <h2>① データを読み込む(全員の画面に反映されます)</h2>
     <ol class="steps">
       <li>Chromeで最強キャラランキングの公開ページ(game8.jp/battlecats/207051)を開きます。</li>
       <li>キーボードの <b>F12</b>(Macは <b>option + command + J</b>)を押すと、画面の横か下に「コンソール」が開きます。</li>
       <li>下の黒い枠の「コードをコピー」を押し、コンソールに貼り付けて <b>Enter</b>。<br>
         <span class="muted">※「貼り付けないで」という警告が出たら、コンソールに <b>allow pasting</b> と入力して Enter してから、もう一度貼り付けてください。</span></li>
-      <li>「◯体をコピーしました」と出たら成功です。このページに戻り、下の入力欄に貼り付けて「読み込む」を押します。</li>
+      <li>「◯体をコピーしました」と出たら成功です。このページに戻り、下の入力欄に貼り付けます。<br><span class="muted">・最初の1回は「読み込む」。<b>新キャラが増えたとき</b>は「新しいキャラだけを足す」を押します(今の最終案・みんなの意見・ランクの説明は、そのまま残ります)。</span></li>
     </ol>
     <pre class="code" id="snippet"></pre>
     <div class="bar"><button id="btnCopySnippet">コードをコピー</button></div>
     <p style="margin:14px 0 6px"><b>コピーしたデータをここに貼り付け</b></p>
     <textarea id="dataIn" placeholder="ここに貼り付け(Ctrl+V / command+V)"></textarea>
-    <div class="bar"><button class="primary" id="btnImport">読み込む</button><span class="muted" id="importMsg"></span></div>
+    <div class="bar"><button class="primary" id="btnMerge">新しいキャラだけを足す</button><button id="btnImport">読み込む(最初から作り直す)</button></div>
+    <div class="muted" id="importMsg" style="margin-top:6px"></div>
   </section>
 
   <section id="boardWrap" class="hide">
@@ -156,6 +162,9 @@
   var items = [], rankList = [];
   var finalCur = {};        // 最終案(全員で共有)
   var opinions = {};        // uid -> {name, cur:{key:rank}}  動かしたキャラだけ
+  var rankNotes = {};       // ランクの説明文(全員で共有) キー=ランク名
+  var editing = false;
+  function rkKey(r) { return String(r).replace(/[.$#\[\]\/]/g, "_"); }
   var extras = [];          // あとから追加したランク名(全員で共有)
   var namesOn = true, hasData = false, tab = "mine";
   var myName = ""; try { myName = localStorage.getItem(NAME_KEY) || ""; } catch (e) {}
@@ -202,6 +211,7 @@
     var c = val.cur || {};
     finalCur = {}; items.forEach(function (it) { finalCur[it.key] = c[it.key] || it.r; });
     opinions = val.opinions || {};
+    rankNotes = val.rankNotes || {};
     // 以前の版で使った名前など、行のないランクにいるキャラも消えないよう、行を足す
     items.forEach(function (it) { var r = finalCur[it.key]; if (rankList.indexOf(r) < 0) rankList.push(r); });
     Object.keys(opinions).forEach(function (u) { var oc = (opinions[u] && opinions[u].cur) || {}; Object.keys(oc).forEach(function (k) { if (rankList.indexOf(oc[k]) < 0) rankList.push(oc[k]); }); });
@@ -212,13 +222,15 @@
     ro.forEach(function (r) { if (rankList.indexOf(r) >= 0 && ordered.indexOf(r) < 0) ordered.push(r); });
     rankList.forEach(function (r) { if (ordered.indexOf(r) < 0) ordered.push(r); });
     rankList = ordered;
+    var prevHas = hasData;
     hasData = items.length > 0;
-    if (hasData) { $("loadPanel").classList.add("hide"); $("boardWrap").classList.remove("hide"); }
+    if (hasData) { $("boardWrap").classList.remove("hide"); if (!prevHas) $("loadPanel").classList.add("hide"); }
     else { $("loadPanel").classList.remove("hide"); $("boardWrap").classList.add("hide"); }
     renderAll();
   }
 
   function renderAll() {
+    if (editing) return;   // 説明文を書いているあいだは、画面を作り直さない
     $("who").textContent = myName ? "名前: " + myName : "";
     $("btnRename").classList.toggle("hide", !myName);
     ["mine", "all", "final"].forEach(function (t) {
@@ -238,6 +250,31 @@
       renderBoard($("boardFinal"), finalCur, function (k, r) { moveFinal(k, r); });
       $("changesFinal").textContent = changesText(finalCur) || "(まだ変更はありません)";
     }
+  }
+
+  function noteEl(rk) {
+    var key = rkKey(rk), txt = rankNotes[key] || "";
+    var d = el("div", "rnote" + (txt ? "" : " empty"), txt || "クリックして、このランクの説明を書く(1〜2行)");
+    d.title = "クリックして編集(全員の画面に出ます)";
+    d.onclick = function () {
+      if (editing) return;
+      editing = true;
+      var finished = false;
+      var ta = document.createElement("textarea"); ta.className = "rnote-in"; ta.value = txt; ta.rows = 2; ta.maxLength = 120;
+      d.replaceWith(ta); ta.focus();
+      function done(save) {
+        if (finished) return; finished = true; editing = false;
+        var v = ta.value.trim();
+        if (save && v !== txt) {
+          if (v) { rankNotes[key] = v; ref.child("rankNotes/" + key).set(v); }
+          else { delete rankNotes[key]; ref.child("rankNotes/" + key).remove(); }
+        }
+        renderAll();
+      }
+      ta.onblur = function () { done(true); };
+      ta.onkeydown = function (e) { if (e.key === "Escape") done(false); };
+    };
+    return d;
   }
 
   function renderBoard(target, curMap, onMove) {
@@ -270,7 +307,8 @@
         var k = e.dataTransfer.getData("text/plain"); if (!k) return;
         onMove(k, rk);
       });
-      row.appendChild(lab); row.appendChild(cells); target.appendChild(row);
+      var body = el("div", "rbody"); body.appendChild(noteEl(rk)); body.appendChild(cells);
+      row.appendChild(lab); row.appendChild(body); target.appendChild(row);
     });
     target.className = namesOn ? "" : "names-off";
   }
@@ -371,7 +409,7 @@
       list = JSON.parse($("dataIn").value.trim());
       if (!Array.isArray(list) || !list.length || !list[0].r) throw new Error("x");
     } catch (e) { $("importMsg").textContent = "読み込めませんでした。コピーした内容をそのまま貼り付けてください。"; return; }
-    if (hasData && !confirm("すでに入っているデータ、最終案、みんなの意見が、すべて消えて置き換わります。よろしいですか？")) return;
+    if (hasData && !confirm("すでに入っているデータ、最終案、みんなの意見、追加したランクと説明文が、すべて消えて置き換わります。よろしいですか？\n(新キャラを足したいだけなら、「新しいキャラだけを足す」を使ってください)")) return;
     var its = {}, c = {};
     list.forEach(function (d, i) {
       var key = "k" + i;
@@ -384,12 +422,41 @@
     }, function () { $("importMsg").textContent = "保存できませんでした。"; });
   }
 
+  function mergeData() {
+    var list;
+    try {
+      list = JSON.parse($("dataIn").value.trim());
+      if (!Array.isArray(list) || !list.length || !list[0].r) throw new Error("x");
+    } catch (e) { $("importMsg").textContent = "読み込めませんでした。コピーした内容をそのまま貼り付けてください。"; return; }
+    if (!hasData) { $("importMsg").textContent = "最初のデータがまだありません。「読み込む(最初から作り直す)」を使ってください。"; return; }
+    var ids = {}, names = {}, maxIdx = -1;
+    items.forEach(function (it) { if (it.id) ids[it.id] = 1; names[it.f || it.n] = 1; if (it.idx > maxIdx) maxIdx = it.idx; });
+    var fresh = list.filter(function (d) {
+      var full = d.f || d.n || "";
+      return !((d.id && ids[d.id]) || names[full]);
+    });
+    if (!fresh.length) { $("importMsg").textContent = "新しいキャラは、いませんでした(今のボードにいないキャラが、ありませんでした)。"; return; }
+    var preview = fresh.map(function (d) { return d.n || d.f; }).join("、");
+    if (!confirm(fresh.length + "体を足します。\n" + preview + "\n\n今の最終案・みんなの意見は、そのまま残ります。よろしいですか？")) return;
+    var its = {}, cs = {};
+    fresh.forEach(function (d, j) {
+      var key = "k" + (maxIdx + 1 + j);
+      its[key] = { r: d.r, n: d.n || d.f || "?", f: d.f || d.n || "", s: d.s || "", id: d.id || "" };
+      cs[key] = d.r;
+    });
+    ref.child("items").update(its).then(function () { return ref.child("cur").update(cs); }).then(function () {
+      $("importMsg").textContent = fresh.length + "体を足しました: " + preview;
+      $("dataIn").value = "";
+    }, function () { $("importMsg").textContent = "保存できませんでした。"; });
+  }
+
   function setTab(t) { tab = t; renderAll(); }
   $("tabMine").onclick = function () { setTab("mine"); };
   $("tabAll").onclick = function () { setTab("all"); };
   $("tabFinal").onclick = function () { setTab("final"); };
   $("btnCopySnippet").onclick = function () { copyText(SNIPPET, this); };
   $("btnImport").onclick = importData;
+  $("btnMerge").onclick = mergeData;
   $("btnNames").onclick = function () { namesOn = !namesOn; renderAll(); };
   $("btnLoad").onclick = function () { $("loadPanel").classList.toggle("hide"); };
   $("btnCopyMine").onclick = function () { copyText(changesText(myCurMap()) || "(変更なし)", this); };
