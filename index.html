@@ -135,8 +135,7 @@
         <div class="bar"><input type="text" id="nameIn" maxlength="20" placeholder="例:山田"><button class="primary" id="btnName">決定</button></div>
       </section>
       <div id="mineBody">
-        <p class="muted">あなた専用のボードです。アイコンをつかんで、移したいランクの行にドロップしてください。画面の外のランクへは、アイコンを<b>クリック(タップ)</b>すると、移動先を選んで移せます。動かしたキャラの結果が、「みんなの意見」に出ます。</p>
-        <div class="bar" style="margin:0 0 12px"><button id="btnCopyFinal2">最終案を自分のボードにコピー</button><button id="btnClearMine">自分の意見を全部消す</button><button id="btnOrderMine">行の順番を最終案と同じに戻す</button><span class="muted">「自分の意見を全部消す」は、動かした結果を最初の並びに戻して、「みんなの意見」からも消します。</span></div>
+        <div class="bar" style="margin:0 0 12px"><button id="btnCopyFinal2">最終案を自分のボードにコピー</button></div>
         <div id="boardMine"></div>
         <section class="panel">
           <h2>あなたの変更点</h2>
@@ -155,8 +154,14 @@
 
     <div id="viewUsage" class="hide">
       <section class="panel guide">
-        <h2>このボードについて</h2>
-        <p>最強キャラランキングの順位を、みんなで意見を出し合って決めるためのボードです。アイコンを動かして、「このキャラは、このランクにしたい」という意見を出します。最終的な順位は、決める人が、みんなの意見を見て決めます。</p>
+        <h2>使い方</h2>
+        <ol>
+          <li>「自分のボード」で、最初に名前を入れます(次から、入れ直す必要はありません)。</li>
+          <li>「最終案を自分のボードにコピー」を押す</li>
+          <li>アイコンをドラッグ＆ドロップして、指定のランクにキャラを動かせます<br>（アイコンをタップしてランクを選択することでもキャラを動かせます）</li>
+          <li>「みんなの意見」で、自分の意見が出ているか、見られます。</li>
+        </ol>
+        <p class="muted">動かさなかったキャラは、「今のままでよい」とは限りません。人数は、目安として見てください。</p>
       </section>
 
       <section class="panel guide">
@@ -179,17 +184,6 @@
         </ul>
       </section>
 
-      <section class="panel guide">
-        <h2>使い方</h2>
-        <ol>
-          <li>「自分のボード」で、最初に名前を入れます(次から、入れ直す必要はありません)。</li>
-          <li>「最終案を自分のボードにコピー」を押す</li>
-          <li>アイコンをドラッグ＆ドロップして、指定のランクにキャラを動かせます<br>（アイコンをタップしてランクを選択することでもキャラを動かせます）</li>
-          <li>「みんなの意見」で、自分の意見が出ているか、見られます。</li>
-          <li>やり直したいときは、「自分の意見を全部消す」で、最初の並びに戻せます。</li>
-        </ol>
-        <p class="muted">動かさなかったキャラは、「今のままでよい」とは限りません。人数は、目安として見てください。</p>
-      </section>
 
       <section class="panel guide">
         <h2>ランクの追加・入れ替え・説明文</h2>
@@ -666,11 +660,6 @@
     if (!confirm(n + "人分の意見を、すべて消します。全員の「自分のボード」の動きが、最初の並びに戻ります。元に戻せません。よろしいですか？")) return;
     hidden = {}; saveHidden();
     ref.update(upd);
-  };
-  $("btnOrderMine").onclick = function () { if (myName) ref.child("opinions/" + myUid() + "/order").remove(); };
-  $("btnClearMine").onclick = function () {
-    if (!myName || !confirm("あなたの意見を、すべて消します。よろしいですか？")) return;
-    var u0 = {}; u0["opinions/" + myUid() + "/cur"] = null; u0["opinions/" + myUid() + "/base"] = null; ref.update(u0);
   };
   $("btnReset").onclick = function () {
     if (!items.length || !confirm("全員の画面で、最終案が最初の並びに戻ります。よろしいですか？")) return;
