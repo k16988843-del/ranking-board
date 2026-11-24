@@ -164,6 +164,9 @@
   var opinions = {};        // uid -> {name, cur:{key:rank}}  動かしたキャラだけ
   var rankNotes = {};       // ランクの説明文(全員で共有) キー=ランク名
   var editing = false;
+  var HID_KEY = "bc-ranking-board-hidden";
+  var hidden = {}; try { hidden = JSON.parse(localStorage.getItem(HID_KEY) || "{}") || {}; } catch (e) { hidden = {}; }
+  function saveHidden() { try { localStorage.setItem(HID_KEY, JSON.stringify(hidden)); } catch (e) {} }
   function rkKey(r) { return String(r).replace(/[.$#\[\]\/]/g, "_"); }
   var extras = [];          // あとから追加したランク名(全員で共有)
   var namesOn = true, hasData = false, tab = "mine";
@@ -376,11 +379,23 @@
         var o = opinions[u], r = o && o.cur && o.cur[it.key];
         if (r && r !== it.r) { (sug[r] = sug[r] || []).push(o.name || u); total++; }
       });
-      if (total) rows.push({ it: it, sug: sug, total: total });
+      var sig = Object.keys(sug).sort().map(function (k) { return k + ":" + sug[k].slice().sort().join(","); }).join("/");
+      if (total) rows.push({ it: it, sug: sug, total: total, sig: sig });
     });
     rows.sort(function (a, b) { return b.total - a.total || a.it.idx - b.it.idx; });
     var box = $("allList"); box.innerHTML = "";
     if (!rows.length) { box.appendChild(el("div", "panel muted", "まだ意見がありません。「自分のボード」でアイコンを動かすと、ここに出ます。")); return; }
+    var allRows = rows;
+    rows = allRows.filter(function (r) { return hidden[r.it.key] !== r.sig; });
+    var hiddenN = allRows.length - rows.length;
+    if (hiddenN) {
+      var hb = el("div", "bar"); hb.style.margin = "0 0 10px";
+      hb.appendChild(el("span", "muted", "隠している行: " + hiddenN + "件(この画面だけの設定です)"));
+      var back = el("button", "small", "隠した行をすべて戻す");
+      back.onclick = function () { hidden = {}; saveHidden(); renderAll(); };
+      hb.appendChild(back); box.appendChild(hb);
+    }
+    if (!rows.length) { box.appendChild(el("div", "panel muted", "表示する行は、ありません。")); return; }
     var tbl = el("table", "op");
     var thead = el("tr"); ["キャラ", "今のランク", "みんなの提案", ""].forEach(function (h) { thead.appendChild(el("th", "", h)); });
     tbl.appendChild(thead);
@@ -398,14 +413,9 @@
         b.onclick = function () { moveFinal(r.it.key, rk); };
         td4.appendChild(b);
       });
-      var rm = el("button", "small", "この行を消す"); rm.style.display = "block"; rm.style.color = "#c92a2a";
-      rm.onclick = function () {
-        var cnt = 0, upd = {};
-        uids.forEach(function (u) { var oc = opinions[u] && opinions[u].cur; if (oc && oc[r.it.key]) { upd["opinions/" + u + "/cur/" + r.it.key] = null; cnt++; } });
-        if (!cnt) return;
-        if (!confirm("「" + r.it.n + "」への意見(" + cnt + "人分)を、すべて消します。意見を出した人のボードでも、このキャラは元のランクに戻ります。よろしいですか？")) return;
-        ref.update(upd);
-      };
+      var rm = el("button", "small", "この行を隠す"); rm.style.display = "block";
+      rm.title = "表示から隠します。意見のデータは、消えません。意見が変わると、また出ます。";
+      rm.onclick = function () { hidden[r.it.key] = r.sig; saveHidden(); renderAll(); };
       td4.appendChild(rm);
       tr.appendChild(td3); tr.appendChild(td4); tbl.appendChild(tr);
     });
