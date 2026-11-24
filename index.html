@@ -111,7 +111,7 @@
       </section>
       <div id="mineBody">
         <p class="muted">あなた専用のボードです。アイコンをつかんで、移したいランクの行にドロップしてください。動かしたキャラの結果が、「みんなの意見」に出ます。</p>
-        <div class="bar" style="margin:0 0 12px"><button id="btnClearMine">自分の意見を全部消す</button><span class="muted">動かした結果を、すべて最初の並びに戻して、「みんなの意見」からも消します。</span></div>
+        <div class="bar" style="margin:0 0 12px"><button id="btnCopyFinal2">最終案を自分のボードにコピー</button><button id="btnClearMine">自分の意見を全部消す</button><span class="muted">「自分の意見を全部消す」は、動かした結果を最初の並びに戻して、「みんなの意見」からも消します。</span></div>
         <div id="boardMine"></div>
         <section class="panel">
           <h2>あなたの変更点</h2>
@@ -461,6 +461,13 @@
   $("btnLoad").onclick = function () { $("loadPanel").classList.toggle("hide"); };
   $("btnCopyMine").onclick = function () { copyText(changesText(myCurMap()) || "(変更なし)", this); };
   $("btnCopyFinal").onclick = function () { copyText(changesText(finalCur) || "(変更なし)", this); };
+  $("btnCopyFinal2").onclick = function () {
+    if (!myName) return;
+    var cur = {}, n = 0;
+    items.forEach(function (it) { if (finalCur[it.key] !== it.r) { cur[it.key] = finalCur[it.key]; n++; } });
+    if (!confirm("最終案で動いている " + n + "体の位置を、あなたのボードにコピーします。今のあなたのボードの内容は、上書きされます。コピーした分は、「みんなの意見」にも、あなたの意見として出ます。よろしいですか？")) return;
+    ref.child("opinions/" + myUid()).set({ name: myName, cur: cur });
+  };
   $("btnClearMine").onclick = function () {
     if (!myName || !confirm("あなたの意見を、すべて消します。よろしいですか？")) return;
     ref.child("opinions/" + myUid() + "/cur").remove();
