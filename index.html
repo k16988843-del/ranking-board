@@ -398,6 +398,15 @@
         b.onclick = function () { moveFinal(r.it.key, rk); };
         td4.appendChild(b);
       });
+      var rm = el("button", "small", "この行を消す"); rm.style.display = "block"; rm.style.color = "#c92a2a";
+      rm.onclick = function () {
+        var cnt = 0, upd = {};
+        uids.forEach(function (u) { var oc = opinions[u] && opinions[u].cur; if (oc && oc[r.it.key]) { upd["opinions/" + u + "/cur/" + r.it.key] = null; cnt++; } });
+        if (!cnt) return;
+        if (!confirm("「" + r.it.n + "」への意見(" + cnt + "人分)を、すべて消します。意見を出した人のボードでも、このキャラは元のランクに戻ります。よろしいですか？")) return;
+        ref.update(upd);
+      };
+      td4.appendChild(rm);
       tr.appendChild(td3); tr.appendChild(td4); tbl.appendChild(tr);
     });
     box.appendChild(tbl);
