@@ -124,6 +124,7 @@
     <div id="viewAll" class="hide">
       <p class="muted">誰かが動かしたキャラだけが出ます。動かしていない人が賛成とは限らないので、人数は目安として見てください。</p>
       <div id="peopleBar" class="muted" style="margin-bottom:10px"></div>
+      <div class="bar" style="margin:0 0 12px"><button id="btnResetAll" style="color:#c92a2a">みんなの意見を、すべてリセットする</button><span class="muted">全員の「自分のボード」の動きが、すべて最初の並びに戻ります。最終案・ランクの追加・説明文・行の順番は、変わりません。</span></div>
       <div id="allList"></div>
     </div>
 
@@ -193,6 +194,13 @@
     }
   }
 
+  // 「意見」として数えるのは、元のランクから動かした分のうち、最終案をコピーしたときの位置と違うものだけ
+  function isOpinion(u, it) {
+    var o = opinions[u]; if (!o || !o.cur) return false;
+    var r = o.cur[it.key]; if (!r || r === it.r) return false;
+    var b = o.base && o.base[it.key];
+    return r !== b;
+  }
   function myCurMap() {
     var o = (opinions[myUid()] && opinions[myUid()].cur) || {};
     var m = {}; items.forEach(function (it) { m[it.key] = o[it.key] || it.r; });
@@ -370,14 +378,14 @@
 
   function renderOpinions() {
     var uids = Object.keys(opinions);
-    var people = uids.map(function (u) { var o = opinions[u]; return { name: o.name || u, n: Object.keys(o.cur || {}).length }; }).filter(function (p) { return p.n > 0; });
+    var people = uids.map(function (u) { var o = opinions[u]; return { name: o.name || u, n: items.filter(function (it) { return isOpinion(u, it); }).length }; }).filter(function (p) { return p.n > 0; });
     $("peopleBar").textContent = people.length ? "意見を出した人(" + people.length + "人): " + people.map(function (p) { return p.name + "(" + p.n + "体)"; }).join("、") : "";
     var rows = [];
     items.forEach(function (it) {
       var sug = {}, total = 0;
       uids.forEach(function (u) {
-        var o = opinions[u], r = o && o.cur && o.cur[it.key];
-        if (r && r !== it.r) { (sug[r] = sug[r] || []).push(o.name || u); total++; }
+        var o = opinions[u];
+        if (isOpinion(u, it)) { var r = o.cur[it.key]; (sug[r] = sug[r] || []).push(o.name || u); total++; }
       });
       var sig = Object.keys(sug).sort().map(function (k) { return k + ":" + sug[k].slice().sort().join(","); }).join("/");
       if (total) rows.push({ it: it, sug: sug, total: total, sig: sig });
@@ -484,13 +492,23 @@
     if (!myName) return;
     var cur = {}, n = 0;
     items.forEach(function (it) { if (finalCur[it.key] !== it.r) { cur[it.key] = finalCur[it.key]; n++; } });
-    if (!confirm("最終案で動いている " + n + "体の位置を、あなたのボードにコピーします。今のあなたのボードの内容は、上書きされます。コピーした分は、「みんなの意見」にも、あなたの意見として出ます。よろしいですか？")) return;
-    ref.child("opinions/" + myUid()).set({ name: myName, cur: cur });
+    if (!confirm("最終案で動いている " + n + "体の位置を、あなたのボードにコピーします。今のあなたのボードの内容は、上書きされます。コピーした分は「みんなの意見」には出ません。コピーしたあとに動かした分だけが、あなたの意見として出ます。よろしいですか？")) return;
+    ref.child("opinions/" + myUid()).set({ name: myName, cur: cur, base: cur, order: myOrderRaw() || null });
+  };
+  $("btnResetAll").onclick = function () {
+    var uids = Object.keys(opinions), upd = {}, n = 0;
+    uids.forEach(function (u) {
+      var o = opinions[u]; if (o && (o.cur || o.base)) { upd["opinions/" + u + "/cur"] = null; upd["opinions/" + u + "/base"] = null; n++; }
+    });
+    if (!n) { alert("リセットする意見は、ありません。"); return; }
+    if (!confirm(n + "人分の意見を、すべて消します。全員の「自分のボード」の動きが、最初の並びに戻ります。元に戻せません。よろしいですか？")) return;
+    hidden = {}; saveHidden();
+    ref.update(upd);
   };
   $("btnOrderMine").onclick = function () { if (myName) ref.child("opinions/" + myUid() + "/order").remove(); };
   $("btnClearMine").onclick = function () {
     if (!myName || !confirm("あなたの意見を、すべて消します。よろしいですか？")) return;
-    ref.child("opinions/" + myUid() + "/cur").remove();
+    var u0 = {}; u0["opinions/" + myUid() + "/cur"] = null; u0["opinions/" + myUid() + "/base"] = null; ref.update(u0);
   };
   $("btnReset").onclick = function () {
     if (!items.length || !confirm("全員の画面で、最終案が最初の並びに戻ります。よろしいですか？")) return;
