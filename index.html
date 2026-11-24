@@ -75,6 +75,13 @@
     table.op { font-size:12px; }
     #viewAll { overflow-x:auto; }
   }
+  .mm-ov { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:10000; display:flex; align-items:center; justify-content:center; padding:12px; }
+  .mm-box { background:#fff; border-radius:14px; padding:16px; max-width:420px; width:100%; max-height:85vh; overflow:auto; }
+  .mm-box h3 { margin:0 0 4px; font-size:15px; }
+  .mm-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0; }
+  .mm-grid button { color:#fff; font-weight:700; border:none; padding:12px 4px; }
+  .mm-grid button[disabled] { opacity:.3; }
+  .chip { cursor:pointer; }
   .warn { background:#fff4e6; border:1px solid #ffd8a8; border-radius:8px; padding:8px 12px; font-size:13px; margin-bottom:12px; }
 </style>
 </head>
@@ -126,7 +133,7 @@
         <div class="bar"><input type="text" id="nameIn" maxlength="20" placeholder="例:山田"><button class="primary" id="btnName">決定</button></div>
       </section>
       <div id="mineBody">
-        <p class="muted">あなた専用のボードです。アイコンをつかんで、移したいランクの行にドロップしてください。動かしたキャラの結果が、「みんなの意見」に出ます。</p>
+        <p class="muted">あなた専用のボードです。アイコンをつかんで、移したいランクの行にドロップしてください。画面の外のランクへは、アイコンを<b>クリック(タップ)</b>すると、移動先を選んで移せます。動かしたキャラの結果が、「みんなの意見」に出ます。</p>
         <div class="bar" style="margin:0 0 12px"><button id="btnCopyFinal2">最終案を自分のボードにコピー</button><button id="btnClearMine">自分の意見を全部消す</button><button id="btnOrderMine">行の順番を最終案と同じに戻す</button><span class="muted">「自分の意見を全部消す」は、動かした結果を最初の並びに戻して、「みんなの意見」からも消します。</span></div>
         <div id="boardMine"></div>
         <section class="panel">
@@ -326,7 +333,7 @@
         lab.appendChild(del);
       }
       var cells = el("div", "cells");
-      stay.concat(came).forEach(function (it) { cells.appendChild(makeChip(it, curMap)); });
+      stay.concat(came).forEach(function (it) { cells.appendChild(makeChip(it, curMap, onMove, list)); });
       cells._onDrop = function (k) { onMove(k, rk); };
       cells.addEventListener("dragover", function (e) { e.preventDefault(); cells.classList.add("over"); });
       cells.addEventListener("dragleave", function (e) { if (!cells.contains(e.relatedTarget)) cells.classList.remove("over"); });
@@ -351,6 +358,38 @@
     return holder;
   }
 
+  // ドラッグ中、画面の上端・下端に近づくと自動でスクロールする(パソコン用)
+  var dragY = -1, scrollTimer = null, lastTouchDrag = 0;
+  document.addEventListener("dragover", function (e) { dragY = e.clientY; });
+  function startAutoScroll() {
+    stopAutoScroll();
+    scrollTimer = setInterval(function () {
+      if (dragY < 0) return;
+      if (dragY < 100) window.scrollBy(0, -(100 - dragY) / 4 - 6);
+      else if (dragY > window.innerHeight - 100) window.scrollBy(0, (dragY - (window.innerHeight - 100)) / 4 + 6);
+    }, 25);
+  }
+  function stopAutoScroll() { clearInterval(scrollTimer); scrollTimer = null; dragY = -1; }
+
+  // アイコンをクリック(タップ)すると、移動先のランクを選んで移せる
+  function showMoveMenu(it, nowRank, list, onMove) {
+    var old = document.querySelector(".mm-ov"); if (old) old.remove();
+    var ov = el("div", "mm-ov"), box = el("div", "mm-box");
+    box.appendChild(el("h3", "", "「" + it.n + "」の移動先を選ぶ"));
+    box.appendChild(el("div", "muted", "今のランク: " + nowRank + "(元: " + it.r + ")"));
+    var grid = el("div", "mm-grid");
+    list.forEach(function (rk) {
+      var b = el("button", "", rk); b.style.background = COLORS[rk] || "#555";
+      if (rk === nowRank) b.disabled = true;
+      b.onclick = function () { ov.remove(); onMove(it.key, rk); };
+      grid.appendChild(b);
+    });
+    box.appendChild(grid);
+    var close = el("button", "", "閉じる"); close.onclick = function () { ov.remove(); };
+    box.appendChild(close); ov.appendChild(box);
+    ov.addEventListener("click", function (e) { if (e.target === ov) ov.remove(); });
+    document.body.appendChild(ov);
+  }
   var COARSE = false; try { COARSE = window.matchMedia("(pointer: coarse)").matches; } catch (e) {}
   // スマホ用: 長押ししてからドラッグ(すぐ動かすと、画面のスクロールになります)
   function attachTouchDrag(c, it) {
@@ -388,20 +427,21 @@
       clearTimeout(timer);
       if (!dragging) return;
       var cells = drop && e.changedTouches && e.changedTouches[0] ? under(e.changedTouches[0]) : null;
-      visualOff(); dragging = false; editing = false;
+      visualOff(); dragging = false; editing = false; lastTouchDrag = Date.now();
       if (cells && cells._onDrop) cells._onDrop(it.key); else renderAll();
     }
     c.addEventListener("touchend", function (e) { finish(e, true); });
     c.addEventListener("touchcancel", function (e) { finish(e, false); });
   }
-  function makeChip(it, curMap) {
+  function makeChip(it, curMap, onMove, list) {
     var c = el("div", "chip"); c.draggable = !COARSE; c.title = it.f || it.n;
     if (curMap[it.key] !== it.r) c.classList.add("moved");
     c.appendChild(iconEl(it));
     c.appendChild(el("div", "nm", it.n));
     c.appendChild(el("div", "tag", "元:" + it.r));
-    c.addEventListener("dragstart", function (e) { e.dataTransfer.setData("text/plain", it.key); e.dataTransfer.effectAllowed = "move"; c.classList.add("dragging"); });
-    c.addEventListener("dragend", function () { c.classList.remove("dragging"); });
+    c.addEventListener("dragstart", function (e) { e.dataTransfer.setData("text/plain", it.key); e.dataTransfer.effectAllowed = "move"; c.classList.add("dragging"); startAutoScroll(); });
+    c.addEventListener("dragend", function () { c.classList.remove("dragging"); stopAutoScroll(); });
+    c.addEventListener("click", function () { if (Date.now() - lastTouchDrag < 500) return; showMoveMenu(it, curMap[it.key], list, onMove); });
     attachTouchDrag(c, it);
     return c;
   }
