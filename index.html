@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>最強キャラランキング 順位変動ボード(みんなで同期)</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --line:#d9dce1; --text:#222; --sub:#666; --accent:#e8590c; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:14px 20px; background:#fff; border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  header h1 { font-size:17px; margin:0 12px 0 0; }
+  button { font:inherit; padding:7px 12px; border:1px solid var(--line); background:#fff; border-radius:8px; cursor:pointer; }
+  button:hover { background:#f0f1f3; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.primary:hover { background:#d24f0a; }
+  main { padding:16px 20px 60px; max-width:1200px; margin:0 auto; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-bottom:16px; }
+  .panel h2 { font-size:15px; margin:0 0 10px; }
+  .steps { margin:0 0 12px; padding-left:20px; line-height:1.8; font-size:14px; }
+  pre.code { background:#1f2328; color:#e6edf3; padding:12px; border-radius:8px; font-size:12px; white-space:pre-wrap; word-break:break-all; margin:8px 0; }
+  textarea { width:100%; min-height:90px; font:12px/1.5 ui-monospace, Menlo, monospace; padding:8px; border:1px solid var(--line); border-radius:8px; }
+  .row { display:flex; border:1px solid var(--line); border-radius:10px; margin-bottom:8px; background:#fff; overflow:hidden; }
+  .rank { width:74px; flex:none; display:flex; flex-direction:column; align-items:center; justify-content:center; font-weight:800; font-size:20px; color:#fff; }
+  .rank small { font-size:11px; font-weight:500; opacity:.9; }
+  .cells { flex:1; display:flex; flex-wrap:wrap; gap:6px; padding:8px; min-height:76px; align-content:flex-start; }
+  .cells.over { background:#fff4e6; outline:2px dashed var(--accent); outline-offset:-4px; }
+  .chip { width:64px; text-align:center; cursor:grab; position:relative; user-select:none; }
+  .chip img { width:60px; height:60px; border-radius:6px; border:2px solid #222; background:#ddd; display:block; margin:0 auto; object-fit:cover; pointer-events:none; }
+  .chip .nm { font-size:10px; line-height:1.2; margin-top:2px; color:var(--sub); height:24px; overflow:hidden; }
+  .names-off .chip .nm { display:none; }
+  .chip.moved img { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); }
+  .chip .tag { position:absolute; top:-5px; right:-2px; background:var(--accent); color:#fff; font-size:9px; padding:1px 4px; border-radius:8px; display:none; }
+  .chip.moved .tag { display:block; }
+  .chip.dragging { opacity:.35; }
+  .noimg { width:60px; height:60px; border-radius:6px; border:2px solid #222; background:#eee; display:flex; align-items:center; justify-content:center; font-size:10px; margin:0 auto; padding:2px; }
+  #changes { white-space:pre-wrap; font-size:14px; line-height:1.8; background:#fafafa; border:1px solid var(--line); border-radius:8px; padding:10px 12px; min-height:44px; }
+  .muted { color:var(--sub); font-size:13px; }
+  .hide { display:none !important; }
+  .bar { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  #status { font-size:12px; padding:3px 10px; border-radius:12px; background:#eee; color:#555; }
+  #status.ok { background:#d3f9d8; color:#2b8a3e; }
+  #status.ng { background:#ffe3e3; color:#c92a2a; }
+</style>
+</head>
+<body>
+<header>
+  <h1>最強キャラランキング 順位変動ボード</h1>
+  <button id="btnLoad">データの読み込み</button>
+  <button id="btnNames">名前の表示 ON/OFF</button>
+  <button id="btnReset">最初の並びに戻す</button>
+  <span id="status">接続中…</span>
+</header>
+<main>
+
+  <section class="panel" id="loadPanel">
+    <h2>① データを読み込む(最初に1人だけ・全員の画面に反映されます)</h2>
+    <ol class="steps">
+      <li>Chromeで最強キャラランキングの公開ページ(game8.jp/battlecats/207051)を開きます。</li>
+      <li>キーボードの <b>F12</b>(Macは <b>option + command + J</b>)を押すと、画面の横か下に「コンソール」が開きます。</li>
+      <li>下の黒い枠の「コードをコピー」を押し、コンソールに貼り付けて <b>Enter</b>。<br>
+        <span class="muted">※「貼り付けないで」という警告が出たら、コンソールに <b>allow pasting</b> と入力して Enter してから、もう一度貼り付けてください。</span></li>
+      <li>「◯体をコピーしました」と出たら成功です。このページに戻り、下の入力欄に貼り付けて「読み込む」を押します。</li>
+    </ol>
+    <pre class="code" id="snippet"></pre>
+    <div class="bar"><button id="btnCopySnippet">コードをコピー</button></div>
+    <p style="margin:14px 0 6px"><b>コピーしたデータをここに貼り付け</b></p>
+    <textarea id="dataIn" placeholder="ここに貼り付け(Ctrl+V / command+V)"></textarea>
+    <div class="bar"><button class="primary" id="btnImport">読み込む</button><span class="muted" id="importMsg"></span></div>
+  </section>
+
+  <section id="boardWrap" class="hide">
+    <p class="muted">アイコンをつかんで、移したいランクの行にドロップしてください。誰かが動かすと、全員の画面に数秒以内で反映されます。動かしたキャラはオレンジ色の枠になり、元のランクが表示されます。</p>
+    <div id="board"></div>
+
+    <section class="panel">
+      <h2>② 変更点の一覧(チャットにそのまま貼れます)</h2>
+      <div id="changes"></div>
+      <div class="bar"><button class="primary" id="btnCopyChanges">変更点をコピー</button></div>
+    </section>
+  </section>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+
+(function () {
+  var firebaseConfig = {
+    apiKey: "AIzaSyDrbFelD4X0KrbWm8m7YBdO-qEaCGWpzUs",
+    authDomain: "ranking-board-2c28a.firebaseapp.com",
+    databaseURL: "https://ranking-board-2c28a-default-rtdb.firebaseio.com",
+    projectId: "ranking-board-2c28a",
+    storageBucket: "ranking-board-2c28a.firebasestorage.app",
+    messagingSenderId: "44927289969",
+    appId: "1:44927289969:web:a1e044c24f8508303029d0"
+  };
+  var SNIPPET = "(()=>{const o=[];document.querySelectorAll('table').forEach(t=>t.querySelectorAll('tr').forEach(r=>{const m=r.children[0]&&r.children[0].querySelector('img');if(!m||!/^(SSS|SS|S\\+|S|A\\+|A|B\\+|B|C|D)画像$/.test(m.alt))return;r.children[1].querySelectorAll('a').forEach(a=>{const i=a.querySelector('img')||{};o.push({r:m.alt.slice(0,-2),n:a.textContent.trim(),f:(i.alt||'').replace(/のアイコン$/,''),s:([i.dataset&&i.dataset.src,i.getAttribute&&i.getAttribute('data-original'),i.currentSrc,i.src].find(u=>u&&!/^data:/.test(u))||'').split('?')[0],id:(a.href.match(/battlecats\\/(\\d+)/)||[])[1]})})}));copy(JSON.stringify(o));console.log(o.length+'体をコピーしました')})()";
+  var COLORS = {"SSS":"#c2255c","SS":"#e03131","S+":"#f08c00","S":"#e67700","A+":"#d9480f","A":"#c92a2a","B+":"#2b8a3e","B":"#1971c2","C":"#5f3dc4","D":"#495057"};
+
+  var $ = function (id) { return document.getElementById(id); };
+  var items = [];      // [{key, idx, r, n, f, s, id}] 最初の並び順
+  var rankList = [];
+  var cur = {};        // key -> 現在のランク(みんなで共有)
+  var namesOn = true;
+  var hasData = false;
+  var db = null, ref = null;
+
+  $("snippet").textContent = SNIPPET;
+
+  function setStatus(text, cls) { var s = $("status"); s.textContent = text; s.className = cls || ""; }
+
+  function copyText(text, btn) {
+    function done(ok) { if (btn) { var t = btn.textContent; btn.textContent = ok ? "コピーしました" : "コピーできませんでした"; setTimeout(function () { btn.textContent = t; }, 1500); } }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(function () { done(true); }, function () { fallback(); }); return; }
+    } catch (e) {}
+    fallback();
+    function fallback() {
+      var ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta); done(ok);
+    }
+  }
+
+  function itemByKey(k) { for (var i = 0; i < items.length; i++) if (items[i].key === k) return items[i]; }
+
+  function applySnapshot(val) {
+    val = val || {};
+    var its = val.items || {};
+    var list = Object.keys(its).map(function (k) { var o = its[k]; o.key = k; o.idx = parseInt(k.slice(1), 10); return o; });
+    list.sort(function (a, b) { return a.idx - b.idx; });
+    items = list;
+    rankList = [];
+    items.forEach(function (it) { if (rankList.indexOf(it.r) < 0) rankList.push(it.r); });
+    cur = {};
+    var c = val.cur || {};
+    items.forEach(function (it) { cur[it.key] = c[it.key] || it.r; });
+    hasData = items.length > 0;
+    if (hasData) { $("loadPanel").classList.add("hide"); $("boardWrap").classList.remove("hide"); }
+    else { $("loadPanel").classList.remove("hide"); $("boardWrap").classList.add("hide"); }
+    render();
+  }
+
+  function render() {
+    var board = $("board"); board.innerHTML = "";
+    rankList.forEach(function (rk) {
+      var members = items.filter(function (it) { return cur[it.key] === rk; });
+      var stay = members.filter(function (it) { return it.r === rk; });
+      var came = members.filter(function (it) { return it.r !== rk; });
+      var row = document.createElement("div"); row.className = "row";
+      var lab = document.createElement("div"); lab.className = "rank"; lab.style.background = COLORS[rk] || "#555";
+      lab.innerHTML = rk + "<small>" + members.length + "体</small>";
+      var cells = document.createElement("div"); cells.className = "cells"; cells.dataset.rank = rk;
+      stay.concat(came).forEach(function (it) { cells.appendChild(makeChip(it)); });
+      cells.addEventListener("dragover", function (e) { e.preventDefault(); cells.classList.add("over"); });
+      cells.addEventListener("dragleave", function (e) { if (!cells.contains(e.relatedTarget)) cells.classList.remove("over"); });
+      cells.addEventListener("drop", function (e) {
+        e.preventDefault(); cells.classList.remove("over");
+        var k = e.dataTransfer.getData("text/plain"); if (!k) return;
+        moveTo(k, rk);
+      });
+      row.appendChild(lab); row.appendChild(cells); board.appendChild(row);
+    });
+    $("board").className = namesOn ? "" : "names-off";
+    renderChanges();
+  }
+
+  function makeChip(it) {
+    var c = document.createElement("div"); c.className = "chip"; c.draggable = true; c.dataset.key = it.key; c.title = it.f || it.n;
+    var moved = cur[it.key] !== it.r; if (moved) c.className += " moved";
+    var holder = document.createElement("div");
+    if (it.s) {
+      var img = document.createElement("img"); img.src = it.s; img.alt = it.n; img.referrerPolicy = "no-referrer"; img.draggable = false;
+      img.onerror = function () { holder.innerHTML = '<div class="noimg"></div>'; holder.firstChild.textContent = it.n; };
+      holder.appendChild(img);
+    } else { holder.innerHTML = '<div class="noimg"></div>'; holder.firstChild.textContent = it.n; }
+    c.appendChild(holder);
+    var nm = document.createElement("div"); nm.className = "nm"; nm.textContent = it.n; c.appendChild(nm);
+    var tag = document.createElement("div"); tag.className = "tag"; tag.textContent = "元:" + it.r; c.appendChild(tag);
+    c.addEventListener("dragstart", function (e) { e.dataTransfer.setData("text/plain", it.key); e.dataTransfer.effectAllowed = "move"; c.classList.add("dragging"); });
+    c.addEventListener("dragend", function () { c.classList.remove("dragging"); });
+    return c;
+  }
+
+  function moveTo(key, rank) {
+    if (cur[key] === rank) return;
+    cur[key] = rank; render();                       // まず自分の画面を更新
+    if (ref) ref.child("cur/" + key).set(rank).catch(function () { setStatus("保存できませんでした", "ng"); });
+  }
+
+  function changesText() {
+    var groups = {}, gOrder = [];
+    items.forEach(function (it) {
+      var now = cur[it.key]; if (now === it.r) return;
+      var g = it.r + " → " + now;
+      if (!groups[g]) { groups[g] = []; gOrder.push(g); }
+      groups[g].push(it.f && it.f !== it.n ? it.n + "(" + it.f + ")" : it.n);
+    });
+    if (!gOrder.length) return "";
+    return gOrder.map(function (g) { return g + "：" + groups[g].join("、"); }).join("\n");
+  }
+  function renderChanges() {
+    var t = changesText();
+    $("changes").textContent = t || "(まだ変更はありません)";
+  }
+
+  function importData() {
+    var txt = $("dataIn").value.trim();
+    var list;
+    try {
+      list = JSON.parse(txt);
+      if (!Array.isArray(list) || !list.length || !list[0].r) throw new Error("形式が違います");
+    } catch (e) {
+      $("importMsg").textContent = "読み込めませんでした。コピーした内容をそのまま貼り付けてください。";
+      return;
+    }
+    if (hasData && !confirm("すでに入っているデータと、みんなが動かした結果が、すべて置き換わります。よろしいですか？")) return;
+    var its = {}, c = {};
+    list.forEach(function (d, i) {
+      var key = "k" + i;
+      its[key] = { r: d.r, n: d.n || d.f || "?", f: d.f || d.n || "", s: d.s || "", id: d.id || "" };
+      c[key] = d.r;
+    });
+    var miss = list.filter(function (d) { return !d.s || /^data:/.test(d.s); }).length;
+    ref.set({ items: its, cur: c }).then(function () {
+      $("importMsg").textContent = list.length + "体を読み込みました" + (miss ? "(アイコンの取れていないキャラ: " + miss + "体)" : "");
+    }, function () { $("importMsg").textContent = "保存できませんでした。インターネットにつながっているか確認してください。"; });
+  }
+
+  $("btnCopySnippet").onclick = function () { copyText(SNIPPET, this); };
+  $("btnImport").onclick = importData;
+  $("btnCopyChanges").onclick = function () { copyText(changesText() || "(変更なし)", this); };
+  $("btnNames").onclick = function () { namesOn = !namesOn; render(); };
+  $("btnLoad").onclick = function () { $("loadPanel").classList.toggle("hide"); };
+  $("btnReset").onclick = function () {
+    if (!items.length) return;
+    if (!confirm("全員の画面で、動かした結果がすべて最初の並びに戻ります。よろしいですか？")) return;
+    var c = {}; items.forEach(function (it) { c[it.key] = it.r; });
+    ref.child("cur").set(c);
+  };
+
+  try {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+    ref = db.ref("board");
+    db.ref(".info/connected").on("value", function (s) { if (s.val()) setStatus("みんなと同期中", "ok"); else setStatus("つながっていません", "ng"); });
+    ref.on("value", function (snap) { applySnapshot(snap.val()); }, function () { setStatus("読み込めませんでした", "ng"); });
+  } catch (e) {
+    setStatus("接続に失敗しました", "ng");
+  }
+})();
+</script>
+</body>
+</html>
