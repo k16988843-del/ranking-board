@@ -111,7 +111,7 @@
       </section>
       <div id="mineBody">
         <p class="muted">あなた専用のボードです。アイコンをつかんで、移したいランクの行にドロップしてください。動かしたキャラの結果が、「みんなの意見」に出ます。</p>
-        <div class="bar" style="margin:0 0 12px"><button id="btnCopyFinal2">最終案を自分のボードにコピー</button><button id="btnClearMine">自分の意見を全部消す</button><span class="muted">「自分の意見を全部消す」は、動かした結果を最初の並びに戻して、「みんなの意見」からも消します。</span></div>
+        <div class="bar" style="margin:0 0 12px"><button id="btnCopyFinal2">最終案を自分のボードにコピー</button><button id="btnClearMine">自分の意見を全部消す</button><button id="btnOrderMine">行の順番を最終案と同じに戻す</button><span class="muted">「自分の意見を全部消す」は、動かした結果を最初の並びに戻して、「みんなの意見」からも消します。</span></div>
         <div id="boardMine"></div>
         <section class="panel">
           <h2>あなたの変更点</h2>
@@ -243,11 +243,11 @@
     if (tab === "mine") {
       $("nameGate").classList.toggle("hide", !!myName);
       $("mineBody").classList.toggle("hide", !myName);
-      if (myName) { var m = myCurMap(); renderBoard($("boardMine"), m, function (k, r) { moveMine(k, r); }); $("changesMine").textContent = changesText(m) || "(まだ変更はありません)"; }
+      if (myName) { var m = myCurMap(); renderBoard($("boardMine"), m, function (k, r) { moveMine(k, r); }, mineList(), "mine"); $("changesMine").textContent = changesText(m) || "(まだ変更はありません)"; }
     } else if (tab === "all") {
       renderOpinions();
     } else {
-      renderBoard($("boardFinal"), finalCur, function (k, r) { moveFinal(k, r); });
+      renderBoard($("boardFinal"), finalCur, function (k, r) { moveFinal(k, r); }, rankList, "final");
       $("changesFinal").textContent = changesText(finalCur) || "(まだ変更はありません)";
     }
   }
@@ -277,9 +277,9 @@
     return d;
   }
 
-  function renderBoard(target, curMap, onMove) {
+  function renderBoard(target, curMap, onMove, list, which) {
     target.innerHTML = "";
-    rankList.forEach(function (rk) {
+    list.forEach(function (rk) {
       var members = items.filter(function (it) { return curMap[it.key] === rk; });
       var stay = members.filter(function (it) { return it.r === rk; });
       var came = members.filter(function (it) { return it.r !== rk; });
@@ -289,7 +289,7 @@
       var mv = el("div"); mv.style.marginTop = "4px";
       [["▲", -1], ["▼", 1]].forEach(function (d) {
         var b = el("button", "small", d[0]); b.style.padding = "1px 6px"; b.style.margin = "0 1px";
-        b.onclick = function () { moveRank(rk, d[1]); };
+        b.onclick = function () { moveRank(rk, d[1], which); };
         mv.appendChild(b);
       });
       lab.appendChild(mv);
@@ -468,6 +468,7 @@
     if (!confirm("最終案で動いている " + n + "体の位置を、あなたのボードにコピーします。今のあなたのボードの内容は、上書きされます。コピーした分は、「みんなの意見」にも、あなたの意見として出ます。よろしいですか？")) return;
     ref.child("opinions/" + myUid()).set({ name: myName, cur: cur });
   };
+  $("btnOrderMine").onclick = function () { if (myName) ref.child("opinions/" + myUid() + "/order").remove(); };
   $("btnClearMine").onclick = function () {
     if (!myName || !confirm("あなたの意見を、すべて消します。よろしいですか？")) return;
     ref.child("opinions/" + myUid() + "/cur").remove();
@@ -494,29 +495,55 @@
     if (used) return true;
     return Object.keys(opinions).some(function (u) { var oc = (opinions[u] && opinions[u].cur) || {}; return Object.keys(oc).some(function (k) { return oc[k] === rk; }); });
   }
-  function moveRank(rk, dir) {
-    var i = rankList.indexOf(rk), j = i + dir;
-    if (i < 0 || j < 0 || j >= rankList.length) return;
-    var o = rankList.slice(); var t = o[i]; o[i] = o[j]; o[j] = t;
-    ref.child("rankOrder").set(o);
+  function normList(x) { return Array.isArray(x) ? x.filter(Boolean) : (x ? Object.keys(x).map(function (k) { return x[k]; }) : []); }
+  function myOrderRaw() { var o = opinions[myUid()]; return o && o.order ? normList(o.order) : null; }
+  // 自分のボードの行の順番(自分で入れ替えていなければ、最終案と同じ)
+  function mineList() {
+    var raw = myOrderRaw(); if (!raw) return rankList.slice();
+    var out = [];
+    raw.forEach(function (r) { if (rankList.indexOf(r) >= 0 && out.indexOf(r) < 0) out.push(r); });
+    rankList.forEach(function (r) { if (out.indexOf(r) < 0) out.push(r); });
+    return out;
+  }
+  function curList() { return tab === "mine" ? mineList() : rankList; }
+  function moveRank(rk, dir, which) {
+    var base = which === "mine" ? mineList() : rankList;
+    var i = base.indexOf(rk), j = i + dir;
+    if (i < 0 || j < 0 || j >= base.length) return;
+    var o = base.slice(); var t = o[i]; o[i] = o[j]; o[j] = t;
+    if (which === "mine") {
+      if (!myName) return;
+      ref.child("opinions/" + myUid() + "/name").set(myName);
+      ref.child("opinions/" + myUid() + "/order").set(o);
+    } else ref.child("rankOrder").set(o);
   }
   function fillRankSelect() {
-    var sel = $("rankAfter"), want = ["", ""].concat(rankList).join("|");
+    var list = curList();
+    var sel = $("rankAfter"), want = ["", ""].concat(list).join("|");
     if (sel.dataset.sig === want) return;
     var keep = sel.value; sel.innerHTML = "";
     var o0 = document.createElement("option"); o0.value = ""; o0.textContent = "いちばん下に追加"; sel.appendChild(o0);
-    rankList.forEach(function (r) { var o = document.createElement("option"); o.value = r; o.textContent = r + " の下に追加"; sel.appendChild(o); });
+    list.forEach(function (r) { var o = document.createElement("option"); o.value = r; o.textContent = r + " の下に追加"; sel.appendChild(o); });
     sel.dataset.sig = want;
-    if (keep && rankList.indexOf(keep) >= 0) sel.value = keep;
+    if (keep && list.indexOf(keep) >= 0) sel.value = keep;
+  }
+  function insertAfter(arr, after, n) {
+    var o = arr.slice(), at = after ? o.indexOf(after) : -1;
+    if (at >= 0) o.splice(at + 1, 0, n); else o.push(n);
+    return o;
   }
   function addRank() {
     var n = $("rankIn").value.trim().slice(0, 8);
     if (!n) return;
     if (rankList.indexOf(n) >= 0) { alert("「" + n + "」の行は、すでにあります。"); return; }
-    var after = $("rankAfter").value, order = rankList.slice();
-    var at = after ? order.indexOf(after) : -1;
-    if (at >= 0) order.splice(at + 1, 0, n); else order.push(n);
-    ref.update({ extraRanks: extras.concat([n]), rankOrder: order });
+    var after = $("rankAfter").value;
+    var upd = { extraRanks: extras.concat([n]), rankOrder: insertAfter(rankList, after, n) };
+    // 自分のボードで追加したとき、自分で順番を入れ替えている人は、自分の順番にも入れる
+    if (tab === "mine" && myName && myOrderRaw()) {
+      upd["opinions/" + myUid() + "/order"] = insertAfter(mineList(), after, n);
+      upd["opinions/" + myUid() + "/name"] = myName;
+    }
+    ref.update(upd);
     $("rankIn").value = "";
   }
   $("btnAddRank").onclick = addRank;
