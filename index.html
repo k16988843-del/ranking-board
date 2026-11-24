@@ -82,6 +82,7 @@
   .mm-grid button { color:#fff; font-weight:700; border:none; padding:12px 4px; }
   .mm-grid button[disabled] { opacity:.3; }
   .chip { cursor:pointer; }
+  .guide h2 { font-size:15px; } .guide ul, .guide ol { margin:6px 0 0; padding-left:22px; line-height:1.8; font-size:14px; } .guide p { font-size:14px; line-height:1.7; margin:4px 0; }
   .warn { background:#fff4e6; border:1px solid #ffd8a8; border-radius:8px; padding:8px 12px; font-size:13px; margin-bottom:12px; }
 </style>
 </head>
@@ -118,6 +119,7 @@
       <button id="tabMine" class="on">自分のボード</button>
       <button id="tabAll">みんなの意見</button>
       <button id="tabFinal">最終案</button>
+      <button id="tabUsage">使い方</button>
     </div>
     <div class="bar" id="addRankBar" style="margin:-4px 0 14px">
       <input type="text" id="rankIn" maxlength="8" placeholder="追加するランク名(例:S++)">
@@ -149,6 +151,64 @@
       <div id="peopleBar" class="muted" style="margin-bottom:10px"></div>
       <div class="bar" style="margin:0 0 12px"><button id="btnResetAll" style="color:#c92a2a">みんなの意見を、すべてリセットする</button><span class="muted">全員の「自分のボード」の動きが、すべて最初の並びに戻ります。最終案・ランクの追加・説明文・行の順番は、変わりません。</span></div>
       <div id="allList"></div>
+    </div>
+
+    <div id="viewUsage" class="hide">
+      <section class="panel guide">
+        <h2>このボードについて</h2>
+        <p>最強キャラランキングの順位を、みんなで意見を出し合って決めるためのボードです。アイコンを動かして、「このキャラは、このランクにしたい」という意見を出します。最終的な順位は、決める人が、みんなの意見を見て決めます。</p>
+      </section>
+
+      <section class="panel guide">
+        <h2>3つのタブ</h2>
+        <ul>
+          <li><b>自分のボード</b>: あなた専用のボードです。ここで動かしても、ほかの人のボードは変わりません。動かしたキャラが、あなたの意見として「みんなの意見」に出ます。</li>
+          <li><b>みんなの意見</b>: 誰かが動かしたキャラが、一覧で出ます。誰が、どのランクにしたいかが分かります。意見が多い順に並びます。</li>
+          <li><b>最終案</b>: 決める人が使う、全員で1つを共有するボードです。ここを動かすと、全員の画面が変わります。</li>
+        </ul>
+      </section>
+
+      <section class="panel guide">
+        <h2>アイコンの動かし方</h2>
+        <ul>
+          <li><b>ドラッグ(パソコン)</b>: アイコンをつかんで、移したいランクの行まで動かして、離します。画面の上や下の端に近づけると、自動でスクロールします。</li>
+          <li><b>クリック(タップ)</b>: アイコンをクリックすると、移動先のランクを選ぶ窓が出ます。画面の外のランクにも、1回で移せます。</li>
+          <li><b>長押し(スマホ)</b>: アイコンを少し長く押すと、指についてきます。そのまま移動先の行まで動かして、離します。</li>
+          <li>動かしたキャラは、オレンジ色の枠になって、「元:◯◯」と出ます。元の場所に戻すと、意見は消えます。</li>
+          <li>「名前の表示 ON/OFF」で、キャラの名前を出したり、消したりできます。</li>
+        </ul>
+      </section>
+
+      <section class="panel guide">
+        <h2>使い方</h2>
+        <ol>
+          <li>「自分のボード」で、最初に名前を入れます(次から、入れ直す必要はありません)。</li>
+          <li>「最終案を自分のボードにコピー」を押す</li>
+          <li>アイコンをドラッグ＆ドロップして、指定のランクにキャラを動かせます<br>（アイコンをタップしてランクを選択することでもキャラを動かせます）</li>
+          <li>「みんなの意見」で、自分の意見が出ているか、見られます。</li>
+          <li>やり直したいときは、「自分の意見を全部消す」で、最初の並びに戻せます。</li>
+        </ol>
+        <p class="muted">動かさなかったキャラは、「今のままでよい」とは限りません。人数は、目安として見てください。</p>
+      </section>
+
+      <section class="panel guide">
+        <h2>ランクの追加・入れ替え・説明文</h2>
+        <ul>
+          <li><b>追加</b>: ランク名を入れて、どの行の下に入れるかを選び、「ランクを追加」を押します。全員の画面に出ます。</li>
+          <li><b>入れ替え</b>: 各行のラベルの「▲」「▼」で、行を上下に動かせます。「自分のボード」の順番は自分だけ、「最終案」の順番は全員で共有です。</li>
+          <li><b>削除</b>: 追加したランクで、空のものは、「削除」で消せます。</li>
+          <li><b>説明文</b>: 各ランクの行の上の薄い文字を、クリックすると、そのランクの説明(1〜2行)を書けます。全員の画面に出ます。</li>
+        </ul>
+      </section>
+
+      <section class="panel guide">
+        <h2>気をつけてほしいこと</h2>
+        <ul>
+          <li>このボードのURLは、身内だけに配ってください。URLを知っている人は、誰でも動かせます。</li>
+          <li>「最終案」「ランクの追加」「説明文」「リセット」は、誰でも操作できます。決める人だけが使う運用にしてください。</li>
+          <li>うまく動かないときは、画面右上が「みんなと同期中」になっているか、見てください。赤いときは、インターネットの接続を確かめて、ページを読み込み直してください。</li>
+        </ul>
+      </section>
     </div>
 
     <div id="viewFinal" class="hide">
@@ -267,11 +327,11 @@
     if (editing) return;   // 説明文を書いているあいだは、画面を作り直さない
     $("who").textContent = myName ? "名前: " + myName : "";
     $("btnRename").classList.toggle("hide", !myName);
-    ["mine", "all", "final"].forEach(function (t) {
+    ["mine", "all", "final", "usage"].forEach(function (t) {
       $("view" + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle("hide", tab !== t);
       $("tab" + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle("on", tab === t);
     });
-    $("addRankBar").classList.toggle("hide", !hasData || tab === "all");
+    $("addRankBar").classList.toggle("hide", !hasData || tab === "all" || tab === "usage");
     if (hasData) fillRankSelect();
     if (!hasData) return;
     if (tab === "mine") {
@@ -280,7 +340,7 @@
       if (myName) { var m = myCurMap(); renderBoard($("boardMine"), m, function (k, r) { moveMine(k, r); }, mineList(), "mine"); $("changesMine").textContent = changesText(m) || "(まだ変更はありません)"; }
     } else if (tab === "all") {
       renderOpinions();
-    } else {
+    } else if (tab === "final") {
       renderBoard($("boardFinal"), finalCur, function (k, r) { moveFinal(k, r); }, rankList, "final");
       $("changesFinal").textContent = changesText(finalCur) || "(まだ変更はありません)";
     }
@@ -582,6 +642,7 @@
   $("tabMine").onclick = function () { setTab("mine"); };
   $("tabAll").onclick = function () { setTab("all"); };
   $("tabFinal").onclick = function () { setTab("final"); };
+  $("tabUsage").onclick = function () { setTab("usage"); };
   $("btnCopySnippet").onclick = function () { copyText(SNIPPET, this); };
   $("btnImport").onclick = importData;
   $("btnMerge").onclick = mergeData;
